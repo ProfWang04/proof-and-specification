@@ -215,3 +215,185 @@ Section GenArray.
 
 End GenArray.
 
+Section PtstoArray.
+
+  Variable V : Type.
+  Notation pts := (@ptsto addr addr_eq_dec V).
+
+  Lemma arrayN_oob': forall (l : list V) a i m,
+    i >= length l
+    -> arrayN pts a l m
+    -> m (a + i) = None.
+  Proof.
+    induction l; intros; auto; simpl in *.
+    destruct (eq_nat_dec i 0); auto.
+    subst; simpl in *; omega.
+
+    unfold sep_star in H0; rewrite sep_star_is in H0; unfold sep_star_impl in H0.
+    repeat deex.
+    unfold mem_union.
+    unfold ptsto in H2; destruct H2; rewrite H2.
+    pose proof (IHl (S a0) (i - 1)).
+    replace (S a0 + (i - 1)) with (a0 + i) in H3 by omega.
+    apply H3; try omega.
+
+    auto.
+    omega.
+  Qed.
+
+  Lemma arrayN_oob: forall (l : list V) i m,
+    i >= length l
+    -> arrayN pts 0 l m
+    -> m i = None.
+  Proof.
+    intros.
+    replace i with (0 + i) by omega.
+    eapply arrayN_oob'; eauto.
+  Qed.
+
+  Lemma arrayN_oob_lt: forall (l : list V) i a m,
+    arrayN pts a l m ->
+    i < a ->
+    m i = None.
+  Proof.
+    induction l; intros; auto; simpl in *.
+    unfold sep_star in H; rewrite sep_star_is in H; unfold sep_star_impl in H.
+    repeat deex.
+    unfold mem_union.
+    unfold ptsto in H2; destruct H2; rewrite H2.
+    eapply IHl; eauto.
+    omega.
+  Qed.
+
+  Lemma arrayN_updN_memupd : forall F l a i (v : V) m,
+    (F * arrayN pts a l)%pred m ->
+    i < length l ->
+    (F * arrayN pts a (updN l i v))%pred (Mem.upd m (a + i) v).
+  Proof.
+    intros.
+    rewrite arrayN_isolate with (i := i).
+    eapply pimpl_trans; [ apply pimpl_refl | | eapply ptsto_upd ].
+    rewrite selN_updN_eq by auto.
+    cancel.
+    rewrite firstn_updN_oob by auto.
+    rewrite skipn_updN by auto.
+    pred_apply.
+    rewrite arrayN_isolate by eauto.
+    cancel.
+    rewrite length_updN; auto.
+    Grab Existential Variables. all: eauto.
+  Qed.
+
+  Lemma arrayN_app_memupd : forall l (v : V) m,
+    arrayN pts 0 l m
+    -> arrayN pts 0 (l ++ v :: nil) (Mem.upd m (length l) v).
+  Proof.
+    intros.
+
+    eapply isolateN_bwd with (i := (length l)) (default := v).
+    rewrite app_length; simpl; omega.
+
+    rewrite firstn_app2; auto.
+    rewrite selN_last; auto.
+    rewrite skipn_oob; [ | rewrite app_length; simpl; omega ].
+    unfold arrayN at 2; auto; apply emp_star_r.
+    simpl.
+
+    apply ptsto_upd_disjoint; auto.
+    eapply arrayN_oob; eauto.
+  Qed.
+
+
+  Theorem arrayN_list_eq : forall (vs1 vs2 : list V) s m,
+    arrayN pts s vs1 m -> arrayN pts s vs2 m -> vs1 = vs2.
+  Proof.
+    induction vs1; destruct vs2; simpl; intros; auto.
+    apply ptsto_valid in H0; congruence.
+    apply ptsto_valid in H; congruence.
+    apply ptsto_valid in H as Hx.
+    apply ptsto_valid in H0 as Hy.
+    rewrite Hx in Hy; inversion Hy; subst; clear Hx Hy; f_equal.
+    apply ptsto_mem_except in H.
+    apply ptsto_mem_except in H0.
+    eapply IHvs1; eauto.
+  Qed.
+
+  Theorem arrayN_strictly_exact : forall (vs : list V) base,
+    strictly_exact (arrayN pts base vs).
+  Proof.
+    induction vs; simpl; intros.
+    apply emp_strictly_exact.
+    apply sep_star_strictly_exact.
+    apply ptsto_strictly_exact.
+    eauto.
+  Qed.
+
+  Lemma arrayN_selN : forall F a st l m (def : V),
+    (F * arrayN pts st l)%pred m ->
+    a >= st ->
+    a < st + length l ->
+    m a = Some (selN l (a - st) def).
+  Proof.
+    intros.
+    eapply ptsto_valid; pred_apply.
+    rewrite arrayN_isolate with (i := a - st) by omega.
+    replace (st + (a - st)) with a by omega.
+    clear H; cancel.
+  Qed.
+
+  Lemma arrayN_selN_exis : forall F a st (l : list V) m,
+    (F * arrayN pts st l)%pred m ->
+    a >= st ->
+    a < st + length l ->
+    exists v, m a = Some v.
+  Proof.
+    intros; destruct l.
+    simpl in *; try omega.
+    eexists; eapply arrayN_selN with (def := v); eauto; try omega.
+  Qed.
+
+  Lemma arrayN_unify' : forall a b s m (F1 F2 : pred), length a = length b ->
+    (F1 * arrayN pts s a)%pred m -> (F2 * arrayN pts s b)%pred m -> a = b.
+  Proof.
+    induction a as [|x a']; intros.
+    simpl in *.
+    rewrite length_nil; auto.
+    destruct b as [|y b']; simpl in *.
+    inversion H.
+    inversion H.
+    erewrite IHa' with (s := S s); eauto.
+    f_equal.
+    assert (m s = Some x /\ m s = Some y); intuition.
+    all : try match goal with
+      | [ H : (_ * (pts ?s ?x * _))%pred ?m |- ?m ?s = Some ?x] =>
+        eapply ptsto_valid;
+        eapply pimpl_apply; [> | exact H]; cancel
+      | [ H : (_ * (_ * arrayN _ _ ?a))%pred ?m |- (_ * arrayN _ _ ?a)%pred _] =>
+        eapply pimpl_apply; [> | exact H]; cancel
+    end.
+    remember (m s) as r; clear Heqr; subst.
+    match goal with [H: Some _ = Some _ |- _] => inversion H end; auto.
+  Qed.
+
+End PtstoArray.
+
+Lemma arrayN_piff_replace: forall T V (l : list T) n (p q : _ -> _ -> @pred _ _ V),
+  (forall i d x, i < length l -> selN l i d = x -> p (i + n) x <=p=> q (i + n) x) ->
+  arrayN p n l <=p=> arrayN q n l.
+Proof.
+  induction l; cbn; intros; auto.
+  rewrite H with (i := 0) by (auto; omega).
+  rewrite IHl.
+  split; cancel.
+  intros.
+  rewrite <- plus_Snm_nSm.
+  rewrite H; (eauto; omega).
+Qed.
+
+Lemma arrayN_map: forall V T T' (l : list T) n (p : addr -> T' -> @pred _ _ V) (f : T -> T'),
+  arrayN p n (map f l) <=p=> arrayN (fun i x => p i (f x)) n l.
+Proof.
+  induction l; cbn; intros; auto.
+  rewrite IHl.
+  auto.
+Qed.
