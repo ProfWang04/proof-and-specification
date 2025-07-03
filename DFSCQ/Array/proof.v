@@ -1073,3 +1073,553 @@ Proof.
   unfold vsmerge; simpl.
   apply incl_cons2; apply incl_nil.
 Qed.
+Lemma synced_list_selN : forall l i def,
+  selN (synced_list l) i (def, nil) = (selN l i def, nil).
+Proof.
+  unfold synced_list; intros.
+  rewrite selN_combine.
+  destruct (lt_dec i (length l)).
+  rewrite repeat_selN; auto.
+  setoid_rewrite selN_oob; auto.
+  omega. rewrite repeat_length; omega. omega.
+  rewrite repeat_length; omega.
+Qed.
+
+Lemma synced_list_map_fst : forall l,
+  map fst (synced_list l) = l.
+Proof.
+  unfold synced_list; intros.
+  rewrite map_fst_combine; auto.
+  rewrite repeat_length; auto.
+Qed.
+
+Lemma synced_list_map_fst_map : forall (vsl : list valuset),
+  synced_list (map fst vsl) = map (fun x => (fst x, nil)) vsl.
+Proof.
+  unfold synced_list; induction vsl; simpl; auto.
+  f_equal; auto.
+Qed.
+
+Lemma vsupsyn_range_synced_list : forall a b,
+  length a = length b ->
+  vsupsyn_range a b = synced_list b.
+Proof.
+  unfold vsupsyn_range, synced_list; intros.
+  rewrite skipn_oob by omega.
+  rewrite app_nil_r; auto.
+Qed.
+
+Lemma possible_crash_list_length : forall l l',
+  possible_crash_list l l' -> length l = length l'.
+Proof.
+  unfold possible_crash_list; firstorder.
+Qed.
+
+Lemma synced_list_length : forall l,
+  length (synced_list l) = length l.
+Proof.
+  unfold synced_list; intros.
+  rewrite combine_length_eq; auto.
+  rewrite repeat_length; auto.
+Qed.
+
+Lemma synced_list_updN : forall l a v,
+  updN (synced_list l) a (v, nil) = synced_list (updN l a v).
+Proof.
+  unfold synced_list; induction l; simpl; intros; auto.
+  destruct a0; simpl; auto.
+  rewrite IHl; auto.
+Qed.
+
+Lemma synced_list_app : forall a b,
+  synced_list (a ++ b) = synced_list a ++ synced_list b.
+Proof.
+  induction a; simpl; auto; intros.
+  unfold synced_list at 1; simpl.
+  f_equal.
+  apply IHa.
+Qed.
+
+Lemma synced_list_inj : forall a b, synced_list a = synced_list b -> a = b.
+Proof.
+  intros.
+  eapply f_equal in H as HH.
+  repeat rewrite synced_list_length in HH.
+  generalize dependent b.
+  induction a; intros; simpl in *.
+  rewrite length_nil; auto.
+  destruct b; simpl in *.
+  inversion HH.
+  unfold synced_list in *.
+  simpl in *.
+  inversion H; f_equal; auto.
+Qed.
+
+Lemma map_snd_synced_list_eq : forall a b,
+  length a = length b ->
+  map snd (synced_list a) = map snd (synced_list b).
+Proof.
+  unfold synced_list; intros.
+  repeat rewrite map_snd_combine; autorewrite with lists; auto.
+Qed.
+
+Lemma map_snd_vsupd_vecs_not_in : forall l d a v,
+  ~ In a (map fst l) ->
+  NoDup (map fst l) ->
+  map snd (vsupd_vecs (synced_list (updN d a v)) l) = map snd (vsupd_vecs (synced_list d) l).
+Proof.
+  induction l; simpl; intros.
+  erewrite map_snd_synced_list_eq; eauto.
+  autorewrite with lists; auto.
+
+  destruct a; intuition; simpl in *.
+  inversion H0; subst.
+  setoid_rewrite vsupd_vecs_vsupd_notin; auto.
+  unfold vsupd.
+  repeat rewrite map_snd_updN.
+  f_equal.
+  apply IHl; auto.
+  f_equal; f_equal; f_equal.
+  rewrite <- synced_list_updN.
+  rewrite <- updN_vsupd_vecs_notin by auto.
+  rewrite selN_updN_ne; auto.
+Qed.
+
+
+Lemma possible_crash_list_updN : forall l l' a v vs,
+  possible_crash_list l l' ->
+  possible_crash_list (updN l a (v, vs)) (updN l' a v).
+Proof.
+  unfold possible_crash_list; simpl; intuition;
+  autorewrite with lists in *; auto.
+  destruct (Nat.eq_dec a i); subst.
+  repeat rewrite selN_updN_eq; auto; omega.
+  repeat rewrite selN_updN_ne; eauto.
+Qed.
+
+
+Lemma possible_crash_list_unique : forall a b,
+  (forall n, snd (selN a n ($0, nil)) = nil) ->
+  possible_crash_list a b ->
+  b = map fst a.
+Proof.
+  unfold possible_crash_list; intuition.
+  eapply list_selN_ext; auto; intros.
+  rewrite map_length; auto.
+  rewrite <- H1 in H0.
+  specialize (H2 _ H0).
+  inversion H2.
+
+  erewrite selN_map; eauto.
+  rewrite H in H3.
+  inversion H3.
+Qed.
+
+Lemma possible_crash_list_synced_list_eq : forall a b,
+  possible_crash_list (synced_list a) b -> a = b.
+Proof.
+  unfold possible_crash_list; intuition.
+  rewrite synced_list_length in *.
+  eapply list_selN_ext; auto; intros.
+  specialize (H1 _ H).
+  inversion H1.
+
+  generalize H2.
+  unfold synced_list; rewrite selN_combine; eauto.
+  rewrite repeat_length; auto.
+
+  generalize H2.
+  unfold synced_list; rewrite selN_combine; simpl.
+  rewrite repeat_selN by auto.
+  intro Hx; inversion Hx.
+  rewrite repeat_length; auto.
+Qed.
+
+Lemma possible_crash_list_synced_list : forall l,
+  possible_crash_list (synced_list l) l.
+Proof.
+  unfold possible_crash_list; intuition.
+  rewrite synced_list_length; auto.
+  unfold synced_list; constructor.
+  rewrite selN_combine; auto.
+  rewrite repeat_length; auto.
+Qed.
+
+Lemma possible_crash_list_cons : forall vsl vl v vs,
+  possible_crash_list vsl vl ->
+  In v (vsmerge vs) ->
+  possible_crash_list (vs :: vsl) (v :: vl).
+Proof.
+  unfold possible_crash_list; intuition.
+  simpl; omega.
+  destruct i, vs, vsl; try now firstorder; eauto with arith.
+Qed.
+
+Theorem possible_crash_list_vssync : forall l l' a,
+  possible_crash_list (vssync l a) l' ->
+  possible_crash_list l l'.
+Proof.
+  unfold possible_crash_list, vssync; intuition; rewrite length_updN in *; auto.
+  specialize (H1 _ H).
+  destruct (addr_eq_dec i a); subst.
+  erewrite selN_updN_eq in H1 by auto; simpl in *. intuition.
+  erewrite selN_updN_ne in H1 by auto; eauto.
+Qed.
+
+
+
+Section ArrayCrashXform.
+
+  Notation pts := (@ptsto addr addr_eq_dec valuset).
+
+  Lemma crash_xform_arrayN: forall l st,
+    crash_xform (arrayN pts st l) =p=>
+      exists l', [[ possible_crash_list l l' ]] *
+      arrayN pts st (synced_list l').
+  Proof.
+    unfold possible_crash_list.
+    induction l; simpl; intros.
+    cancel.
+    instantiate (1 := nil).
+    simpl; auto. auto.
+
+    xform.
+    rewrite IHl.
+    cancel; [ instantiate (1 := v' :: l') | .. ]; simpl; auto; try cancel;
+    destruct i; simpl; auto;
+    destruct (H4 i); try omega; simpl; auto.
+  Qed.
+
+  Lemma crash_xform_arrayN_r: forall l l' st,
+    possible_crash_list l' l ->
+    arrayN pts st (synced_list l) =p=> crash_xform (arrayN pts st l').
+  Proof.
+    unfold possible_crash_list.
+    induction l; simpl; intros; auto.
+    - intuition; destruct l'; simpl in *; try congruence.
+      apply crash_invariant_emp_r.
+    - intuition; destruct l'; simpl in *; try congruence.
+      pose proof (H1 0) as H1'. simpl in H1'.
+      rewrite IHl.
+      rewrite crash_xform_sep_star_dist.
+      rewrite <- crash_xform_ptsto_r with (v := a) by (apply H1'; omega).
+      apply pimpl_refl.
+      intuition.
+      specialize (H1 (S i)). simpl in H1. apply H1. omega.
+  Qed.
+
+  Lemma crash_xform_synced_arrayN: forall l st,
+    Forall (fun x => snd x = nil) l ->
+    crash_xform (arrayN pts st l) =p=> arrayN pts st l.
+  Proof.
+    induction l; simpl; auto; intros.
+    xform.
+    rewrite IHl.
+    cancel; subst.
+    inversion H; simpl in *; subst; auto.
+    inversion H; simpl in *; subst.
+    inversion H1.
+    eapply Forall_cons2; eauto.
+  Qed.
+
+  Lemma crash_xform_arrayN_combine_nils: forall (l : list valu) st,
+    crash_xform (arrayN pts st (List.combine l (repeat nil (length l)))) =p=>
+    arrayN pts st (List.combine l (repeat nil (length l))).
+  Proof.
+    intros.
+    apply crash_xform_synced_arrayN.
+    rewrite Forall_forall; intros.
+    induction l; simpl in *.
+    inversion H.
+    inversion H; subst; simpl; auto.
+  Qed.
+
+  Lemma crash_xform_arrayN_synced: forall (l : list valu) st,
+    crash_xform (arrayN pts st (synced_list l)) =p=>
+    arrayN pts st (List.combine l (repeat nil (length l))).
+  Proof.
+    intros.
+    apply crash_xform_synced_arrayN.
+    rewrite Forall_forall; intros.
+    induction l; simpl in *.
+    inversion H.
+    inversion H; subst; simpl; auto.
+  Qed.
+
+End ArrayCrashXform.
+
+
+
+Section SubsetArray.
+
+  Theorem sync_invariant_arrayN_subset : forall vs a,
+    sync_invariant (arrayN ptsto_subset a vs).
+  Proof.
+    induction vs; simpl; auto.
+  Qed.
+
+  Lemma arrayN_subset_oob': forall l a i m,
+    i >= length l
+    -> arrayN ptsto_subset a l m
+    -> m (a + i) = None.
+  Proof.
+    induction l; intros; auto; simpl in *.
+    destruct (eq_nat_dec i 0); auto.
+    subst; simpl in *; omega.
+
+    unfold sep_star in H0; rewrite sep_star_is in H0; unfold sep_star_impl in H0.
+    repeat deex.
+    unfold mem_union.
+    unfold ptsto_subset in H2.
+    destruct_lift H2.
+    unfold ptsto in H1; destruct H1.
+    pose proof (IHl (S a0) (i - 1)).
+    replace (S a0 + (i - 1)) with (a0 + i) in H3 by omega.
+    destruct (m1 (a0 + i)) eqn:?.
+    contradict Heqo.
+    rewrite H2; try congruence.
+    omega.
+    apply H3.
+    omega.
+    auto.
+  Qed.
+
+  Lemma arrayN_subset_oob: forall l i m,
+    i >= length l
+    -> arrayN ptsto_subset 0 l m
+    -> m i = None.
+  Proof.
+    intros.
+    replace i with (0 + i) by omega.
+    eapply arrayN_subset_oob'; eauto.
+  Qed.
+
+  Lemma arrayN_selN_subset : forall F a st l m def,
+    (F * arrayN ptsto_subset st l)%pred m ->
+    a >= st ->
+    a < st + length l ->
+    let vs0 := (selN l (a - st) def) in
+    exists vs, m a = Some vs /\ fst vs = fst vs0 /\ incl (snd vs) (snd vs0).
+  Proof.
+    cbn; intros.
+    rewrite arrayN_isolate with (i := a - st) in H by omega.
+    unfold ptsto_subset at 2 in H; destruct_lift H; simpl in *.
+    eexists; split; try split.
+    eapply ptsto_valid.
+    pred_apply; replace (st + (a - st)) with a by omega; cancel.
+    simpl; auto.
+    auto.
+  Qed.
+
+  Lemma arrayN_subset_memupd : forall F l a i v vs vs' m,
+    (F * arrayN ptsto_subset a l)%pred m ->
+    incl vs' vs ->
+    i < length l ->
+    (F * arrayN ptsto_subset a (updN l i (v, vs)))%pred (Mem.upd m (a + i) (v, vs')).
+  Proof.
+    intros.
+    rewrite arrayN_isolate with (i := i) in H by auto.
+    unfold ptsto_subset at 2 in H; destruct_lift H.
+    setoid_rewrite sep_star_comm in H.
+    apply sep_star_assoc in H.
+    apply ptsto_upd with (v := (v, vs')) in H.
+    pred_apply.
+    setoid_rewrite arrayN_isolate with (i := i) at 3.
+    unfold ptsto_subset at 4.
+    rewrite selN_updN_eq by auto.
+    cancel.
+    rewrite firstn_updN_oob by auto.
+    rewrite skipn_updN by auto.
+    cancel.
+    rewrite length_updN; auto.
+    Grab Existential Variables. all: eauto.
+  Qed.
+
+  Lemma crash_xform_arrayN_subset: forall l st,
+    crash_xform (arrayN ptsto_subset st l) =p=>
+      exists l', [[ possible_crash_list l l' ]] *
+      arrayN ptsto_subset st (synced_list l').
+  Proof.
+    unfold possible_crash_list.
+    induction l; simpl; intros.
+    cancel.
+    instantiate (1 := nil).
+    simpl; auto. auto.
+
+    xform.
+    rewrite IHl.
+    rewrite crash_xform_ptsto_subset; unfold ptsto_subset, synced_list.
+    cancel; [ instantiate (1 := v' :: l') | .. ]; simpl; auto; try cancel;
+    destruct i; simpl; auto;
+    destruct (H4 i); try omega; simpl; auto.
+  Qed.
+
+  Lemma crash_xform_arrayN_subset_r: forall l l' st,
+    possible_crash_list l' l ->
+    arrayN ptsto_subset st (synced_list l) =p=>
+     crash_xform (arrayN ptsto_subset st l').
+  Proof.
+    unfold possible_crash_list.
+    induction l; simpl; intros; auto.
+    - intuition; destruct l'; simpl in *; try congruence.
+      apply crash_invariant_emp_r.
+    - intuition; destruct l'; simpl in *; try congruence.
+      pose proof (H1 0) as H1'. simpl in H1'.
+      rewrite IHl.
+      rewrite crash_xform_sep_star_dist.
+      rewrite <- crash_xform_ptsto_subset_r with (v := a) by (apply H1'; omega).
+      rewrite ptsto_subset_pimpl_ptsto.
+      apply pimpl_refl.
+      intuition.
+      specialize (H1 (S i)). simpl in H1. apply H1. omega.
+  Qed.
+
+  Hint Resolve incl_refl.
+
+  Lemma crash_xform_synced_arrayN_subset: forall l st,
+    Forall (fun x => snd x = nil) l ->
+    crash_xform (arrayN ptsto_subset st l) =p=> arrayN ptsto_subset st l.
+  Proof.
+    induction l; simpl; auto; intros.
+    xform.
+    rewrite IHl.
+    cancel; subst.
+    rewrite crash_xform_ptsto_subset; unfold ptsto_subset.
+    cancel.
+    inversion H; simpl in *; subst; auto.
+    inversion H; simpl in *; subst.
+    inversion H0.
+    eapply Forall_cons2; eauto.
+  Qed.
+
+  Lemma crash_xform_arrayN_subset_combine_nils: forall (l : list valu) st,
+    crash_xform (arrayN ptsto_subset st (List.combine l (repeat nil (length l)))) =p=>
+    arrayN ptsto_subset st (List.combine l (repeat nil (length l))).
+  Proof.
+    intros.
+    apply crash_xform_synced_arrayN_subset.
+    rewrite Forall_forall; intros.
+    induction l; simpl in *.
+    inversion H.
+    inversion H; subst; simpl; auto.
+  Qed.
+
+  Lemma crash_xform_arrayN_subset_synced: forall (l : list valu) st,
+    crash_xform (arrayN ptsto_subset st (synced_list l)) =p=>
+    arrayN ptsto_subset st (List.combine l (repeat nil (length l))).
+  Proof.
+    intros.
+    apply crash_xform_synced_arrayN_subset.
+    rewrite Forall_forall; intros.
+    induction l; simpl in *.
+    inversion H.
+    inversion H; subst; simpl; auto.
+  Qed.
+
+End SubsetArray.
+
+
+Hint Resolve sync_invariant_arrayN_subset.
+Notation arrayS := (arrayN ptsto_subset).
+
+
+Section ListUpd.
+
+  Variable V : Type.
+  Notation pts := (@ptsto addr addr_eq_dec V).
+
+  Fixpoint listupd (m : @mem _ addr_eq_dec V) base (vs : list V) :=
+    match vs with
+    | nil => m
+    | v :: tl => listupd (upd m base v) (S base) tl
+    end.
+
+  Lemma arrayN_listupd: forall l (m : @mem _ _ V) l0 base F,
+    (F * arrayN pts base l0 )%pred m ->
+    length l0 = length l ->
+    (F * arrayN pts base l)%pred (listupd m base l).
+  Proof.
+    induction l; intros; destruct l0; simpl in *; auto; try omega.
+    apply sep_star_assoc.
+    eapply IHl with (l0 := l0); eauto.
+    setoid_rewrite sep_star_comm at 1.
+    apply sep_star_assoc.
+    eapply ptsto_upd.
+    pred_apply; cancel.
+  Qed.
+
+  Lemma arrayN_listupd_eq : forall (l : list V) F st d,
+    (F * arrayN pts st l)%pred d ->
+    d = listupd d st l.
+  Proof.
+    induction l; simpl; intros; auto.
+    erewrite <- IHl.
+    rewrite upd_nop; auto.
+    eapply ptsto_valid.
+    pred_apply; cancel.
+    rewrite upd_nop; auto.
+    pred_apply; cancel.
+    eapply ptsto_valid.
+    pred_apply; cancel.
+  Qed.
+
+  Lemma listupd_sel_oob : forall (l : list V) a off m,
+    a < off \/ a >= off + (length l) ->
+    listupd m off l a = m a.
+  Proof.
+    induction l; simpl; intros; auto.
+    rewrite IHl by (intuition omega).
+    destruct (addr_eq_dec off a0); subst.
+    exfalso; intuition.
+    rewrite Mem.upd_ne; auto.
+  Qed.
+
+  Lemma listupd_sel_inb : forall (l : list V) a off m def,
+    a >= off ->
+    a < off + (length l) ->
+    listupd m off l a = Some (selN l (a - off) def).
+  Proof.
+    induction l; simpl; intros; try omega.
+    case_eq (a0 - off); intros.
+    replace off with a0 in * by omega.
+    rewrite listupd_sel_oob; intuition.
+    apply Mem.upd_eq; auto.
+
+    erewrite IHl; try omega.
+    replace (a0 - S off) with n by omega; auto.
+  Qed.
+
+  Lemma listupd_sel_cases : forall (l : list V) a off m def,
+    ((a < off \/ a >= off + (length l)) /\ listupd m off l a = m a ) \/
+    (a >= off /\ a < off + (length l) /\ listupd m off l a = Some (selN l (a - off) def) ).
+  Proof.
+    intros.
+    destruct (lt_dec a off);
+    destruct (ge_dec a (off + (length l)));
+    try ( left; intuition; apply listupd_sel_oob; auto ).
+    right; intuition.
+    apply listupd_sel_inb; omega.
+  Qed.
+
+End ListUpd.
+
+
+Section ListUpdSubset.
+
+  Lemma arrayN_listupd_subset : forall l m l0 base F,
+    (F * arrayN ptsto_subset base l0 )%pred m ->
+    length l0 = length l ->
+    (F * arrayN ptsto_subset base l)%pred (listupd m base l).
+  Proof.
+    induction l; intros; destruct l0; simpl in *; auto; try omega.
+    apply sep_star_assoc.
+    eapply IHl with (l0 := l0); eauto.
+    setoid_rewrite sep_star_comm at 1.
+    apply sep_star_assoc.
+    apply sep_star_comm; destruct a, p.
+    eapply ptsto_subset_upd.
+    pred_apply; cancel.
+    apply incl_refl.
+  Qed.
+
+End ListUpdSubset.
