@@ -1,28 +1,13 @@
-Require Import Mem.
-Require Import ListUtils.
-Require Import List Omega Ring Word Pred PredCrash.
-Require Import Prog Hoare SepAuto BasicProg.
-Require Import FunctionalExtensionality.
-Require Import WordAuto.
-Require Import AsyncDisk.
+Definition vsupd (vs : list valuset) (i : addr) (v : valu) : list valuset :=
+  updN vs i (v, vsmerge (selN vs i ($0, nil))).
 
-Import ListNotations.
+Definition vssync (vs : list valuset) (i : addr) : list valuset :=
+  updN vs i (fst (selN vs i ($0, nil)), nil).
 
-Set Implicit Arguments.
-Set Default Proof Using "Type".
+Definition vsupd_range (vsl : list valuset) (vl : list valu) :=
+  let n := length vl in
+  (List.combine vl (map vsmerge (firstn n vsl))) ++ skipn n vsl.
 
+Definition vs_synced a (vl : list valuset) :=
+  snd (selN vl a ($0, nil)) = nil.
 
-(** * A generic array predicate: a sequence of consecutive points-to facts *)
-
-Section GenArray.
-
-  Variable V VP : Type.
-  Variable pts : addr -> V -> @pred addr addr_eq_dec VP.
-
-  Infix "|-?->" := pts (at level 35) : pred_scope.
-
-  Fixpoint arrayN (a : addr) (vs : list V) : @pred _ addr_eq_dec _ :=
-    match vs with
-      | nil => emp
-      | v :: vs' => a |-?-> v * arrayN (S a) vs'
-    end%pred.
