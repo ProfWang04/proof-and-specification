@@ -13,3 +13,7 @@ Definition vs_synced a (vl : list valuset) :=
 
 Definition vssync_range (vsl : list valuset) n :=
   (List.combine (map fst (firstn n vsl)) (repeat nil n)) ++ skipn n vsl.
+    
+(** update vsl according to (addr, valu) pairs in l. *)
+Definition vsupd_vecs (vsl : list valuset) (l : list (addr * valu)) : list valuset :=
+  fold_left (fun vs e => (vsupd vs (fst e) (snd e))) l vsl.
