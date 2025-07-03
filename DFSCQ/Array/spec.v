@@ -17,3 +17,11 @@ Definition vssync_range (vsl : list valuset) n :=
 (** update vsl according to (addr, valu) pairs in l. *)
 Definition vsupd_vecs (vsl : list valuset) (l : list (addr * valu)) : list valuset :=
   fold_left (fun vs e => (vsupd vs (fst e) (snd e))) l vsl.
+
+(** sync vsl for all addresses in l. *)
+Definition vssync_vecs (vsl : list valuset) (l : list addr) : list valuset :=
+  fold_left vssync l vsl.
+
+Definition vssync_vecs_rev (vsl : list valuset) (l : list addr) : list valuset :=
+  fold_right (fun a m => vssync m a) vsl (rev l).
+
