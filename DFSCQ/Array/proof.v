@@ -537,3 +537,128 @@ Proof.
   rewrite firstn_oob by omega.
   apply forall_incl_refl.
 Qed.
+Lemma vssync_range_length : forall vsl n,
+  n <= length vsl ->
+  length (vssync_range vsl n) = length vsl.
+Proof.
+  unfold vssync_range; intros.
+  autorewrite with lists.
+  rewrite combine_length.
+  rewrite Nat.min_l.
+  rewrite skipn_length.
+  autorewrite with lists.
+  rewrite firstn_length_l; omega.
+  autorewrite with lists.
+  rewrite firstn_length_l; omega.
+Qed.
+
+Lemma vssync_range_progress : forall vs m,
+  m < length vs ->
+  vssync (vssync_range vs m) m = vssync_range vs (S m).
+Proof.
+  unfold vssync, vssync_range; intros.
+  rewrite updN_app2.
+  erewrite firstn_S_selN by auto.
+  rewrite map_app.
+  rewrite repeat_app_tail.
+  rewrite combine_app
+    by (autorewrite with lists; rewrite firstn_length_l; omega).
+  rewrite <- app_assoc; f_equal.
+  rewrite combine_length; autorewrite with lists.
+  rewrite Nat.min_l; repeat rewrite firstn_length_l; try omega.
+  replace (m - m) with 0 by omega.
+  rewrite updN_0_skip_1 by (rewrite skipn_length; omega).
+  rewrite skipn_skipn; simpl.
+  f_equal; f_equal.
+  rewrite selN_app2.
+  rewrite combine_length; rewrite Nat.min_l;
+     autorewrite with lists; repeat rewrite firstn_length_l; try omega.
+  replace (m + (m - m)) with m by omega.
+  unfold vsmerge; auto.
+  all: rewrite combine_length_eq2; autorewrite with lists;
+    repeat rewrite firstn_length_l; omega.
+Qed.
+
+
+Lemma vssync_range_incl : forall n vs,
+  n <= length vs ->
+  Forall2 (fun va vb => incl (vsmerge va) (vsmerge vb)) (vssync_range vs n) vs.
+Proof.
+  induction n; simpl; intros.
+  cbn.
+  apply forall_incl_refl.
+  rewrite <- vssync_range_progress by omega.
+  rewrite <- updN_selN_eq with (ix := n) (l := vs) (default := ($0, nil)) at 2.
+  apply forall2_updN.
+  apply IHn; omega.
+
+  unfold vsmerge; simpl.
+  unfold vssync_range.
+  rewrite selN_app2, skipn_selN.
+  rewrite combine_length_eq, map_length, firstn_length_l.
+  rewrite Nat.sub_diag, Nat.add_0_r.
+  apply incl_cons2; apply incl_nil.
+  omega.
+  rewrite map_length, firstn_length_l, repeat_length; omega.
+  rewrite combine_length_eq, map_length, firstn_length_l; try omega.
+  rewrite map_length, firstn_length_l, repeat_length; omega.
+Qed.
+
+
+Definition vsupsyn_range (vsl : list valuset) (vl : list valu) :=
+  let n := length vl in
+  (List.combine vl (repeat nil n)) ++ skipn n vsl.
+
+Lemma vsupsyn_range_length : forall vsl l,
+  length l <= length vsl ->
+  length (vsupsyn_range vsl l) = length vsl.
+Proof.
+  unfold vsupsyn_range; intros.
+  rewrite app_length.
+  rewrite combine_length.
+  rewrite Nat.min_l.
+  rewrite skipn_length.
+  omega.
+  rewrite repeat_length; auto.
+Qed.
+
+Lemma vsupsyn_range_selN : forall vsl vl i def,
+  i < length vl ->
+  selN (vsupsyn_range vsl vl) i (def, nil) = (selN vl i def, nil).
+Proof.
+  unfold vsupsyn_range; intros.
+  rewrite selN_app1.
+  rewrite selN_combine, repeat_selN; auto.
+  rewrite repeat_length; auto.
+  rewrite combine_length_eq; auto.
+  rewrite repeat_length; auto.
+Qed.
+
+Lemma vsupsyn_range_selN_oob : forall vsl vl i def,
+  i >= length vl ->
+  selN (vsupsyn_range vsl vl) i def = selN vsl i def.
+Proof.
+  unfold vsupsyn_range; intros.
+  rewrite selN_app2.
+  rewrite skipn_selN.
+  rewrite combine_length_eq.
+  rewrite le_plus_minus_r; auto.
+  rewrite repeat_length; auto.
+  rewrite combine_length_eq; auto.
+  rewrite repeat_length; auto.
+Qed.
+
+Lemma vsupd_range_app_tl : forall l vs v,
+  length l + 1 <= length vs ->
+  vsupd_range vs (l ++ [v]) = vsupd (vsupd_range vs l) (length l) v.
+Proof.
+  unfold vsupd_range, vsupd; intros.
+  rewrite updN_app2, selN_app2; rewrite combine_length, map_length, firstn_length, Nat.min_l; auto;
+  try apply Nat.min_case_strong; intros; try omega.
+  rewrite Nat.sub_diag, app_length; simpl.
+  erewrite firstn_plusone_selN, map_app by omega.
+  rewrite combine_app by (rewrite map_length, firstn_length_l by omega; auto); simpl.
+  rewrite app_assoc_reverse, updN_0_skip_1, <- cons_app by (rewrite skipn_length; omega).
+  rewrite skipn_skipn', skipn_selN, Nat.add_0_r.
+  reflexivity.
+Qed.
