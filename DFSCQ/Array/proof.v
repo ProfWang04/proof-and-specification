@@ -830,3 +830,246 @@ Proof.
   eapply Forall_cons2; eauto.
   rewrite vsupd_length; auto.
 Qed.
+Theorem vssync_vecs_rev_eq : forall l vsl,
+  vssync_vecs vsl l = vssync_vecs_rev vsl l.
+Proof.
+  intros; unfold vssync_vecs, vssync_vecs_rev.
+  rewrite fold_left_rev_right; auto.
+Qed.
+
+Lemma vssync_vecs_app : forall m l a,
+  vssync_vecs m (l ++ [a]) = vssync (vssync_vecs m l) a.
+Proof.
+  intros.
+  repeat rewrite vssync_vecs_rev_eq.
+  unfold vssync_vecs_rev.
+  rewrite rev_unit; reflexivity.
+Qed.
+
+Lemma vssync_vecs_length : forall l vs,
+  length (vssync_vecs vs l) = length vs.
+Proof.
+  induction l; intros; simpl; auto.
+  rewrite IHl.
+  unfold vssync.
+  rewrite length_updN; auto.
+Qed.
+
+Lemma vssync_vecs_length_ok : forall l m def vs,
+  Forall (fun e => e < length vs) l ->
+  m < length l ->
+  selN l m def < length (vssync_vecs vs (firstn m l)).
+Proof.
+  intros.
+  rewrite vssync_vecs_length.
+  rewrite Forall_forall in H.
+  apply H.
+  apply in_selN; auto.
+Qed.
+
+Lemma vssync_vecs_progress : forall l m vs,
+  m < length l ->
+  vssync (vssync_vecs vs (firstn m l)) (selN l m 0) =
+  vssync_vecs vs (firstn (S m) l).
+Proof.
+  induction l; intros.
+  inversion H.
+  destruct m; auto.
+  simpl.
+  rewrite IHl; auto.
+  simpl in H.
+  omega.
+Qed.
+
+Lemma vssync_vecs_cons: forall a d x,
+  vssync_vecs d (x :: a) = vssync_vecs (vssync d x) a.
+Proof.
+  auto.
+Qed.
+
+Lemma vssync_vecs_vssync_comm : forall l d a,
+  vssync_vecs (vssync d a) l = vssync (vssync_vecs d l) a.
+Proof.
+  induction l; intros; simpl; auto.
+  destruct (addr_eq_dec a a0); subst; auto.
+  repeat rewrite IHl.
+  unfold vssync.
+  repeat rewrite selN_updN_ne by auto.
+  rewrite updN_comm; auto.
+Qed.
+
+Lemma vssync_vecs_comm: forall l l' vs,
+  vssync_vecs (vssync_vecs vs l) l' = vssync_vecs (vssync_vecs vs l') l.
+Proof.
+  induction l; intros.
+  auto.
+  rewrite vssync_vecs_cons.
+  rewrite IHl.
+  rewrite vssync_vecs_vssync_comm.
+  rewrite vssync_vecs_cons.
+  auto.
+Qed.
+
+Lemma vssync_vecs_app_comm: forall l l' vs,
+  vssync_vecs vs (l ++ l') = vssync_vecs vs (l' ++ l).
+Proof.
+  induction l; intros.
+  rewrite app_nil_r.
+  auto.
+  rewrite <- app_comm_cons.
+  rewrite vssync_vecs_cons.
+  change (a :: l) with ([a] ++ l).
+  rewrite app_assoc.
+  rewrite <- IHl.
+  rewrite app_assoc.
+  rewrite vssync_vecs_app.
+  rewrite vssync_vecs_vssync_comm.
+  auto.
+Qed.
+
+Lemma vssync_vecs_app': forall l l' vs,
+  vssync_vecs (vssync_vecs vs l) l' = vssync_vecs vs (l ++ l').
+Proof.
+  induction l; intros.
+  auto.
+  rewrite <- app_comm_cons.
+  repeat rewrite vssync_vecs_cons.
+  repeat rewrite vssync_vecs_vssync_comm.
+  rewrite IHl; auto.
+Qed.
+
+Lemma vssync_synced : forall l a,
+  vs_synced a l ->
+  vssync l a = l.
+Proof.
+  unfold vs_synced, vssync.
+  intros.
+  rewrite <- H.
+  destruct (lt_dec a (length l)).
+  erewrite selN_inb, <- surjective_pairing by auto.
+  rewrite updN_selN_eq; auto.
+  rewrite updN_oob by omega.
+  auto.
+Qed.
+
+Lemma vs_synced_vssync_nop: forall vs a,
+  vs_synced a vs -> vssync vs a = vs.
+Proof.
+  unfold vs_synced, vssync.
+  intuition.
+  eapply selN_eq_updN_eq.
+  destruct selN eqn:H'; cbn in *.
+  rewrite H'; congruence.
+Qed.
+
+Lemma vssync_vecs_nop: forall vs l,
+  Forall (fun a => vs_synced a vs) l ->
+  vssync_vecs vs l = vs.
+Proof.
+  induction l; intros.
+  auto.
+  inversion H; subst.
+  rewrite vssync_vecs_cons.
+  rewrite vssync_vecs_vssync_comm.
+  rewrite IHl; auto.
+  eapply vs_synced_vssync_nop; auto.
+Qed.
+
+Lemma vssync_vecs_nil: forall vs,
+  vssync_vecs vs nil = vs.
+Proof.
+  intros.
+  apply vssync_vecs_nop; constructor.
+Qed.
+
+Lemma vssync_comm: forall vs a b,
+  vssync (vssync vs a) b = vssync (vssync vs b) a.
+Proof.
+  intros.
+  unfold vssync.
+  destruct (addr_eq_dec a b); subst; auto.
+  repeat rewrite selN_updN_ne by auto.
+  rewrite updN_comm; auto.
+Qed.
+
+Lemma vssync_vsupd_eq : forall l a v,
+  vssync (vsupd l a v) a = updN l a (v, nil).
+Proof.
+  unfold vsupd, vssync, vsmerge; intros.
+  rewrite updN_twice.
+  destruct (lt_dec a (length l)).
+  rewrite selN_updN_eq; simpl; auto.
+  rewrite selN_oob.
+  repeat rewrite updN_oob by omega; auto.
+  autorewrite with lists; omega.
+Qed.
+
+Lemma updN_vsupd_vecs_notin : forall av l a v,
+  ~ In a (map fst av) ->
+  updN (vsupd_vecs l av) a v = vsupd_vecs (updN l a v) av.
+Proof.
+  induction av; simpl; intros; auto.
+  destruct a; simpl in *; intuition.
+  rewrite IHav by auto.
+  unfold vsupd, vsmerge.
+  rewrite updN_comm by auto.
+  rewrite selN_updN_ne; auto.
+Qed.
+
+
+Lemma vssync_selN_not_in : forall l i d,
+  ~ In i l ->
+  selN (vssync_vecs d l) i ($0, nil) = selN d i ($0, nil).
+Proof.
+  induction l; simpl; auto; intuition.
+  rewrite IHl; auto.
+  unfold vssync.
+  rewrite selN_updN_ne; simpl; auto.
+Qed.
+
+
+Lemma vssync_vecs_selN_In : forall l i d,
+  In i l ->
+  i < length d ->
+  selN (vssync_vecs d l) i ($0, nil) = (fst (selN d i ($0, nil)), nil).
+Proof.
+  induction l; intros; auto.
+  inversion H.
+  destruct (addr_eq_dec a i); subst; simpl.
+  destruct (in_dec addr_eq_dec i l).
+  rewrite IHl; unfold vssync; auto.
+  rewrite selN_updN_eq; simpl; auto.
+  rewrite length_updN; auto.
+
+  rewrite vssync_selN_not_in by auto.
+  unfold vssync; rewrite selN_updN_eq; simpl; auto.
+
+  inversion H; subst; try congruence.
+  rewrite IHl; unfold vssync; auto.
+  rewrite selN_updN_ne; auto.
+  rewrite length_updN; auto.
+Qed.
+
+
+Lemma vssync_vecs_incl : forall l vs,
+  Forall (fun a => a < length vs) l ->
+  Forall2 (fun va vb => incl (vsmerge va) (vsmerge vb)) (vssync_vecs vs l) vs.
+Proof.
+  induction l; simpl; intros.
+  apply forall_incl_refl.
+  rewrite vssync_vecs_vssync_comm.
+  rewrite <- updN_selN_eq with (ix := a) (l := vs) (default := ($0, nil)) at 2.
+  apply forall2_updN.
+  apply IHl; auto.
+  eapply Forall_cons2; eauto.
+
+  destruct (In_dec addr_eq_dec a l).
+  rewrite vssync_vecs_selN_In; auto.
+  unfold vsmerge; simpl.
+  apply incl_cons2; apply incl_nil.
+  inversion H; eauto.
+
+  rewrite vssync_selN_not_in; auto.
+  unfold vsmerge; simpl.
+  apply incl_cons2; apply incl_nil.
+Qed.
