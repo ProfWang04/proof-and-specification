@@ -397,3 +397,143 @@ Proof.
   rewrite IHl.
   auto.
 Qed.
+
+Lemma vsupd_length : forall vsl a v,
+  length (vsupd vsl a v) = length vsl.
+Proof.
+  unfold vsupd; intros.
+  rewrite length_updN; auto.
+Qed.
+
+Lemma vsupd_range_length : forall vsl l,
+  length l <= length vsl ->
+  length (vsupd_range vsl l) = length vsl.
+Proof.
+  unfold vsupd_range; intros.
+  rewrite app_length.
+  rewrite combine_length.
+  rewrite Nat.min_l.
+  rewrite skipn_length.
+  omega.
+  rewrite map_length.
+  rewrite firstn_length_l; auto.
+Qed.
+
+Lemma vsupd_range_nil : forall vsl,
+  vsupd_range vsl nil = vsl.
+Proof.
+  unfold vsupd_range; intros.
+  autorewrite with lists; simpl; auto.
+Qed.
+
+Lemma vsupd_range_progress : forall i vsl l,
+  length l <= length vsl -> i < length l ->
+    (vsupd (vsupd_range vsl (firstn i l)) i (selN l i $0))
+  = (vsupd_range vsl ((firstn i l) ++ [ selN l i $0 ])).
+Proof.
+  unfold vsupd, vsmerge; intros.
+  unfold vsupd_range.
+  autorewrite with lists; simpl.
+  repeat replace (length (firstn i l)) with i
+    by (rewrite firstn_length_l by omega; auto).
+  rewrite updN_app2.
+  erewrite firstn_plusone_selN by omega.
+  rewrite map_app.
+  rewrite combine_app
+    by (rewrite map_length; repeat rewrite firstn_length_l; omega).
+  rewrite <- app_assoc; f_equal; simpl.
+  rewrite combine_length; autorewrite with lists.
+  rewrite Nat.min_l; repeat rewrite firstn_length_l; try omega.
+  replace (i - i) with 0 by omega.
+  rewrite updN_0_skip_1 by (rewrite skipn_length; omega).
+  rewrite skipn_skipn'; f_equal; f_equal.
+  rewrite selN_app2.
+  rewrite combine_length; rewrite Nat.min_l;
+     autorewrite with lists; repeat rewrite firstn_length_l; try omega.
+  replace (i + (i - i)) with i by omega.
+  unfold vsmerge; auto.
+  all: rewrite combine_length_eq2; autorewrite with lists;
+    repeat rewrite firstn_length_l; omega.
+Qed.
+
+Lemma forall_incl_refl : forall vs,
+  Forall2 (fun va vb => incl (vsmerge va) (vsmerge vb)) vs vs.
+Proof.
+  induction vs; auto.
+  constructor; auto.
+  apply incl_refl.
+Qed.
+
+
+Lemma vsupd_range_incl : forall l vs,
+  length l <= length vs ->
+  Forall2 (fun va vb => incl (vsmerge va) (vsmerge vb)) vs (vsupd_range vs l).
+Proof.
+  induction l; intros; simpl.
+  rewrite vsupd_range_nil.
+  apply forall_incl_refl.
+
+  destruct vs.
+  inversion H.
+  cbn.
+  constructor.
+  apply incl_tl; apply incl_refl.
+  apply IHl.
+  simpl in *; omega.
+Qed.
+
+
+Lemma vsupd_range_selN_oob : forall vs n l,
+  n >= length l ->
+  length l <= length vs ->
+  selN (vsupd_range vs l) n ($0, nil) = selN vs n ($0, nil).
+Proof.
+  unfold vsupd_range; intros.
+  rewrite selN_app2.
+  rewrite combine_length_eq.
+  rewrite skipn_selN.
+  f_equal; omega.
+  rewrite map_length, firstn_length_l; omega.
+  rewrite combine_length_eq; auto.
+  rewrite map_length, firstn_length_l; omega.
+Qed.
+
+Lemma vsupd_range_selN_inb : forall vs n l,
+  n < length l ->
+  length l <= length vs ->
+  selN (vsupd_range vs l) n ($0, nil) = (selN l n $0, vsmerge (selN vs n ($0, nil))).
+Proof.
+  unfold vsupd_range; intros.
+  rewrite selN_app1.
+  rewrite selN_combine.
+  erewrite selN_map.
+  rewrite selN_firstn; auto.
+  rewrite firstn_length_l; omega.
+  rewrite map_length, firstn_length_l; omega.
+  rewrite combine_length_eq; auto.
+  rewrite map_length, firstn_length_l; omega.
+Qed.
+
+
+Lemma vsupd_range_firstn_incl : forall n l vs,
+  length l <= length vs ->
+  Forall2 (fun va vb => incl (vsmerge va) (vsmerge vb)) 
+            (vsupd_range vs (firstn n l)) (vsupd_range vs l).
+Proof.
+  induction n; intros.
+  apply vsupd_range_incl; auto.
+  destruct (lt_dec n (length l)).
+
+  erewrite firstn_S_selN by auto.
+  rewrite <- vsupd_range_progress by omega.
+  erewrite <- updN_selN_eq with (l := (vsupd_range vs l)) (ix := n).
+  apply forall2_updN; eauto.
+  rewrite vsupd_range_selN_oob.
+  rewrite vsupd_range_selN_inb; auto; try omega.
+  apply incl_refl.
+  rewrite firstn_length_l; omega.
+  rewrite firstn_length_l; omega.
+
+  rewrite firstn_oob by omega.
+  apply forall_incl_refl.
+Qed.
