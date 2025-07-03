@@ -25,3 +25,9 @@ Definition vssync_vecs (vsl : list valuset) (l : list addr) : list valuset :=
 Definition vssync_vecs_rev (vsl : list valuset) (l : list addr) : list valuset :=
   fold_right (fun a m => vssync m a) vsl (rev l).
 
+(* crash prediate over arrays *)
+Definition synced_list m: list valuset := List.combine m (repeat nil (length m)).
+
+Definition possible_crash_list (l: list valuset) (l': list valu) :=
+  length l = length l' /\
+  forall i, i < length l -> In (selN l' i $0) (vsmerge (selN l i ($0, nil))).
