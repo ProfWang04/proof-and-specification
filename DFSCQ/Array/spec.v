@@ -11,3 +11,5 @@ Definition vsupd_range (vsl : list valuset) (vl : list valu) :=
 Definition vs_synced a (vl : list valuset) :=
   snd (selN vl a ($0, nil)) = nil.
 
+Definition vssync_range (vsl : list valuset) n :=
+  (List.combine (map fst (firstn n vsl)) (repeat nil n)) ++ skipn n vsl.
