@@ -662,3 +662,171 @@ Proof.
   rewrite skipn_skipn', skipn_selN, Nat.add_0_r.
   reflexivity.
 Qed.
+Lemma vsupd_vecs_length : forall l vs,
+  length (vsupd_vecs vs l) = length vs.
+Proof.
+  induction l; intros; simpl; auto.
+  rewrite IHl.
+  unfold vsupd.
+  rewrite length_updN; auto.
+Qed.
+
+Lemma vsupd_vecs_length_ok : forall l m def vs,
+  Forall (fun e => fst e < length vs) l ->
+  m < length l ->
+  fst (selN l m def) < length (vsupd_vecs vs (firstn m l)).
+Proof.
+  intros.
+  rewrite vsupd_vecs_length.
+  rewrite Forall_forall in H.
+  apply H.
+  apply in_selN; auto.
+Qed.
+
+Lemma vsupd_vecs_progress : forall l m vs,
+  m < length l ->
+  let e := selN l m (0, $0) in
+  vsupd (vsupd_vecs vs (firstn m l)) (fst e) (snd e) =
+  vsupd_vecs vs (firstn (S m) l).
+Proof.
+  induction l; intros.
+  inversion H.
+  destruct m; auto.
+  simpl.
+  rewrite IHl; auto.
+  simpl in H.
+  omega.
+Qed.
+
+
+Lemma vsupd_comm : forall l a1 v1 a2 v2,
+  a1 <> a2 ->
+  vsupd (vsupd l a1 v1) a2 v2 = vsupd (vsupd l a2 v2) a1 v1.
+Proof.
+  unfold vsupd; intros.
+  rewrite updN_comm by auto.
+  repeat rewrite selN_updN_ne; auto.
+Qed.
+
+Lemma vsupd_vecs_vsupd_notin : forall av l a v,
+  ~ In a (map fst av) ->
+  vsupd_vecs (vsupd l a v) av = vsupd (vsupd_vecs l av) a v.
+Proof.
+  induction av; simpl; intros; auto.
+  destruct a; simpl in *; intuition.
+  rewrite <- IHav by auto.
+  rewrite vsupd_comm; auto.
+Qed.
+
+Lemma vsupd_vecs_selN_not_in : forall l a d,
+  ~ In a (map fst l) ->
+  selN (vsupd_vecs d l) a ($0, nil) = selN d a ($0, nil).
+Proof.
+  induction l; intros; destruct a; simpl in *; auto; intuition.
+  rewrite IHl by auto.
+  unfold vsupd.
+  rewrite selN_updN_ne; auto.
+Qed.
+
+
+Lemma vsupd_vecs_app : forall d a b,
+  vsupd_vecs d (a ++ b) = vsupd_vecs (vsupd_vecs d a) b.
+Proof.
+  unfold vsupd_vecs; intros.
+  rewrite fold_left_app; auto.
+Qed.
+
+Lemma vsupd_vecs_cons : forall l a v avl,
+  vsupd_vecs l ((a, v) :: avl) = vsupd_vecs (vsupd l a v) avl.
+Proof.
+  auto.
+Qed.
+
+
+Lemma vsupd_vecs_selN_vsmerge_in' : forall a v avl l,
+  In v (vsmerge (selN l a ($0, nil))) ->
+  a < length l ->
+  In v (vsmerge (selN (vsupd_vecs l avl) a ($0, nil))).
+Proof.
+  intros.
+  destruct (In_dec addr_eq_dec a (map fst avl)).
+  - revert H H0 i; revert avl l a v.
+    induction avl; auto; intros; destruct a.
+    destruct i; simpl in H0; subst.
+
+    destruct (In_dec addr_eq_dec n (map fst avl)).
+    apply IHavl; auto.
+    right; unfold vsupd; simpl.
+    rewrite selN_updN_eq; auto.
+    unfold vsupd; rewrite length_updN; simpl in *; auto.
+
+    rewrite vsupd_vecs_cons, vsupd_vecs_vsupd_notin by auto.
+    unfold vsupd; rewrite selN_updN_eq.
+    rewrite vsupd_vecs_selN_not_in; auto.
+    right; auto.
+    rewrite vsupd_vecs_length; auto.
+
+    rewrite vsupd_vecs_cons.
+    apply IHavl; auto; unfold vsupd.
+    destruct (addr_eq_dec a0 n); subst.
+    rewrite selN_updN_eq; auto.
+    right; auto.
+    rewrite selN_updN_ne; auto.
+    rewrite length_updN; auto.
+  - rewrite vsupd_vecs_selN_not_in; auto.
+Qed.
+
+
+Lemma vsupd_vecs_selN_vsmerge_in : forall a v avl l,
+  In v (vsmerge (selN l a ($0, nil))) ->
+  In v (vsmerge (selN (vsupd_vecs l avl) a ($0, nil))).
+Proof.
+  intros.
+  destruct (lt_dec a (length l)).
+  apply vsupd_vecs_selN_vsmerge_in'; auto.
+  rewrite selN_oob in *; auto; try omega.
+  rewrite vsupd_vecs_length; omega.
+Qed.
+
+Lemma vsupd_vecs_incl : forall l vs,
+  Forall (fun e => fst e < length vs) l ->
+  Forall2 (fun va vb => incl (vsmerge va) (vsmerge vb)) vs (vsupd_vecs vs l).
+Proof.
+  intros.
+  eapply selN_Forall2.
+  rewrite vsupd_vecs_length; auto.
+  intros.
+  unfold incl; intros.
+  apply vsupd_vecs_selN_vsmerge_in; eauto.
+Qed.
+
+Lemma vsupd_vecs_firstn_incl : forall n l vs,
+  Forall (fun e => fst e < length vs) l ->
+  Forall2 (fun va vb => incl (vsmerge va) (vsmerge vb)) 
+            (vsupd_vecs vs (firstn n l)) (vsupd_vecs vs l).
+Proof.
+  intros.
+  eapply selN_Forall2 with (da := ($0, nil)) (db := ($0, nil)).
+  repeat rewrite vsupd_vecs_length; auto.
+  repeat rewrite vsupd_vecs_length; auto.
+  intros.
+
+  generalize dependent vs.
+  generalize dependent n.
+  induction l; intros.
+  rewrite firstn_nil; cbn.
+  apply incl_refl.
+  destruct n; simpl.
+  unfold incl; intros.
+  apply vsupd_vecs_selN_vsmerge_in; eauto.
+  cbn.
+  unfold vsupd; destruct a; simpl.
+  destruct (addr_eq_dec n i); subst.
+  rewrite selN_updN_eq; eauto.
+  rewrite selN_updN_ne; eauto.
+
+  apply IHl.
+  rewrite vsupd_length.
+  eapply Forall_cons2; eauto.
+  rewrite vsupd_length; auto.
+Qed.
