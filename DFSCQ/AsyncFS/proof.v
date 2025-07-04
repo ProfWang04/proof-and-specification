@@ -868,3 +868,113 @@ Theorem recover_ok : forall cachesize,
   Qed.
 
   Hint Extern 1 ({{_}} Bind (create _ _ _ _ ) _) => apply create_ok : prog.
+
+
+
+  Theorem rename_ok : forall fsxp dnum srcpath srcname dstpath dstname mscs,
+    {< ds sm Fm Ftop tree cwd tree_elem ilist frees,
+    PRE:hm
+      LOG.rep (FSXPLog fsxp) (SB.rep fsxp) (LOG.NoTxn ds) (MSLL mscs) sm hm *
+      [[[ ds!! ::: (Fm * rep fsxp Ftop tree ilist frees mscs sm) ]]] *
+      [[ find_subtree cwd tree = Some (TreeDir dnum tree_elem) ]]
+    POST:hm' RET:^(mscs', ok)
+      [[ MSAlloc mscs' = MSAlloc mscs ]] *
+         ([[ isError ok ]] * LOG.rep (FSXPLog fsxp) (SB.rep fsxp) (LOG.NoTxn ds) (MSLL mscs') sm hm' *
+      [[[ ds!! ::: (Fm * rep fsxp Ftop tree ilist frees mscs' sm) ]]] \/
+      [[ ok = OK tt ]] * 
+        rename_rep ds mscs' sm Fm fsxp Ftop tree tree_elem ilist frees cwd dnum srcpath srcname dstpath dstname hm')
+    XCRASH:hm'
+      LOG.idempred (FSXPLog fsxp) (SB.rep fsxp) ds hm' \/
+      exists d tree' srcnum srcents dstnum dstents subtree pruned renamed ilist' frees' mscs',
+      [[ MSAlloc mscs' = MSAlloc mscs ]] *
+      LOG.idempred (FSXPLog fsxp) (SB.rep fsxp) (pushd d ds) hm' *
+      rename_rep_inner d frees' ilist' tree' srcnum srcents subtree pruned dstnum dstents renamed mscs' sm Fm fsxp Ftop tree tree_elem ilist frees cwd dnum srcpath srcname dstpath dstname
+    >} rename fsxp dnum srcpath srcname dstpath dstname mscs.
+  Proof.
+    unfold rename, rename_rep, rename_rep_inner; intros.
+    step.
+    step.
+    step.
+    step.
+    step.
+    step.
+    step.
+    xcrash. or_r. cancel.
+    repeat (cancel; progress xform_norm).
+    safecancel.
+    rewrite LOG.recover_any_idempred. cancel.
+    2: pred_apply; cancel.
+    all: eauto.
+    step.
+    step.
+    xcrash. or_l. rewrite LOG.notxn_idempred. cancel.
+    xcrash. or_l. rewrite LOG.intact_idempred. cancel.
+    xcrash. or_l. rewrite LOG.notxn_idempred. cancel.
+  Unshelve.
+    all: constructor.
+  Qed.
+
+  Hint Extern 1 ({{_}} Bind (rename _ _ _ _ _ _ _) _) => apply rename_ok : prog.
+
+
+  Theorem delete_ok : forall fsxp dnum name mscs,
+    {< ds sm pathname Fm Ftop tree tree_elem frees ilist,
+    PRE:hm
+      LOG.rep (FSXPLog fsxp) (SB.rep fsxp) (LOG.NoTxn ds) (MSLL mscs) sm hm *
+      [[[ ds!! ::: (Fm * rep fsxp Ftop tree ilist frees mscs sm) ]]] *
+      [[ find_subtree pathname tree = Some (TreeDir dnum tree_elem) ]]
+    POST:hm' RET:^(mscs', ok)
+     [[ MSAlloc mscs' = MSAlloc mscs ]] *
+     ([[ isError ok ]] *
+        LOG.rep (FSXPLog fsxp) (SB.rep fsxp) (LOG.NoTxn ds) (MSLL mscs') sm hm' *
+                [[[ ds!! ::: (Fm * rep fsxp Ftop tree ilist frees mscs' sm) ]]] \/
+      [[ ok = OK tt ]] * exists d tree' ilist' frees',
+        LOG.rep (FSXPLog fsxp) (SB.rep fsxp) (LOG.NoTxn (pushd d ds)) (MSLL mscs') sm hm' *
+        [[ tree' = update_subtree pathname
+                      (delete_from_dir name (TreeDir dnum tree_elem)) tree ]] *
+        [[[ d ::: (Fm * rep fsxp Ftop tree' ilist' frees' mscs' sm) ]]] *
+        [[ dirtree_safe ilist  (BFILE.pick_balloc frees  (MSAlloc mscs')) tree
+                        ilist' (BFILE.pick_balloc frees' (MSAlloc mscs')) tree' ]] *
+        [[ forall inum def', inum <> dnum -> In inum (tree_inodes tree) ->
+           In inum (tree_inodes tree') ->
+           selN ilist inum def' = selN ilist' inum def' ]])
+    XCRASH:hm'
+      LOG.idempred (FSXPLog fsxp) (SB.rep fsxp) ds hm' \/
+      exists d tree' ilist' frees' mscs',
+      [[ MSAlloc mscs' = MSAlloc mscs ]] *
+      LOG.idempred (FSXPLog fsxp) (SB.rep fsxp) (pushd d ds) hm' *
+      [[ tree' = update_subtree pathname
+                    (delete_from_dir name (TreeDir dnum tree_elem)) tree ]] *
+      [[[ d ::: (Fm * rep fsxp Ftop tree' ilist' frees' mscs' sm) ]]] *
+      [[ dirtree_safe ilist  (BFILE.pick_balloc frees  (MSAlloc mscs')) tree
+                      ilist' (BFILE.pick_balloc frees' (MSAlloc mscs')) tree' ]] *
+      [[ forall inum def', inum <> dnum ->
+           (In inum (tree_inodes tree') \/ (~ In inum (tree_inodes tree))) ->
+          selN ilist inum def' = selN ilist' inum def' ]]
+    >} delete fsxp dnum name mscs.
+  Proof.
+    unfold delete; intros.
+    step.
+    step.
+    step.
+    step.
+    step.
+    step.
+    step.
+    xcrash. or_r.
+    repeat (cancel; progress xform_norm).
+    safecancel. rewrite LOG.recover_any_idempred. cancel.
+    3: pred_apply; cancel.
+    all: eauto.
+    step.
+    step.
+    xcrash. or_l. rewrite LOG.notxn_idempred. cancel.
+    xcrash. or_l. rewrite LOG.intact_idempred. cancel.
+    xcrash. or_l. rewrite LOG.notxn_idempred. cancel.
+  Unshelve.
+    all: constructor.
+  Qed.
+
+  Hint Extern 1 ({{_}} Bind (delete _ _ _ _) _) => apply delete_ok : prog.
+
+End AFS.
