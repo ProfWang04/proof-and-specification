@@ -38,3 +38,44 @@ Definition addrlen := 64.
 Notation "'valulen'" := (Valulen.valulen).
 Notation "'valulen_is'" := (Valulen.valulen_is).
 Notation "'valu'" := (word valulen).
+
+
+Notation "'addr'" := nat.
+Notation "'waddr'" := (word addrlen).
+
+Definition addr_eq_dec := Nat.eq_dec.
+Definition waddr_eq_dec := @weq addrlen.
+
+Definition waddrring := wring addrlen.
+Add Ring waddrring : waddrring (decidable (weqb_sound addrlen), constants [wcst]).
+
+Notation "'valuset'" := (valu * list valu)%type.
+
+(* Async-disk *)
+Definition rawdisk := @mem addr addr_eq_dec valuset.
+Definition vsmerge (vs : valuset) : list valu := fst vs :: snd vs.
+
+
+(* Hashing *)
+Definition hashlen := 32.
+Parameter hash_fwd : forall sz, word sz -> word hashlen.
+Definition default_valu : valu := $0.
+Definition default_hash := hash_fwd default_valu.
+
+(* A hashmap holds all keys that Hash has been called on, maps hash values to keys. *)
+Inductive hashmap : Type :=
+  | empty_hashmap : hashmap
+  | upd_hashmap : hashmap -> word hashlen -> { sz : nat & word sz } -> hashmap.
+
+Definition upd_hashmap' hm h sz k : hashmap :=
+  upd_hashmap hm h (existT _ sz k).
+
+Fixpoint hashmap_get hm h : option {sz : nat & word sz} :=
+  if (weq h default_hash)
+    then Some (existT _ _ default_valu) else
+    (match hm with
+    | empty_hashmap => None
+    | upd_hashmap hm' h' k' =>  if (weq h' h)
+                                then Some k'
+                                else hashmap_get hm' h
+    end).
