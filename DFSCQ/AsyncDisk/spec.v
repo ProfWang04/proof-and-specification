@@ -79,3 +79,6 @@ Fixpoint hashmap_get hm h : option {sz : nat & word sz} :=
                                 then Some k'
                                 else hashmap_get hm' h
     end).
+                                  
+Definition hash_safe hm h sz (k : word sz) :=
+  hashmap_get hm h = None \/ hashmap_get hm h = Some (existT _ _ k).
