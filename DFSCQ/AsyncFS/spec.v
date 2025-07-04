@@ -401,3 +401,25 @@ Definition recover cachesize :=
   (* Recover theorems *)
 
   Hint Extern 0 (okToUnify (LOG.rep_inner _ _ _ _) (LOG.rep_inner _ _ _ _)) => constructor : okToUnify.
+ Definition rename_rep_inner d frees' ilist' tree' srcnum srcents subtree pruned dstnum dstents renamed mscs' sm Fm fsxp Ftop tree tree_elem ilist frees cwd dnum srcpath srcname dstpath dstname
+    : @pred addr addr_eq_dec valuset :=
+    ([[[ d ::: (Fm * rep fsxp Ftop tree' ilist' frees' mscs' sm) ]]] *
+    [[ find_subtree srcpath (TreeDir dnum tree_elem) = Some (TreeDir srcnum srcents) ]] *
+    [[ find_dirlist srcname srcents = Some subtree ]] *
+    [[ pruned = tree_prune srcnum srcents srcpath srcname (TreeDir dnum tree_elem) ]] *
+    [[ find_subtree dstpath pruned = Some (TreeDir dstnum dstents) ]] *
+    [[ renamed = tree_graft dstnum dstents dstpath dstname subtree pruned ]] *
+    [[ tree' = update_subtree cwd renamed tree ]] *
+    [[ dirtree_safe ilist  (BFILE.pick_balloc frees  (MSAlloc mscs')) tree
+                    ilist' (BFILE.pick_balloc frees' (MSAlloc mscs')) tree' ]] *
+    [[ forall inum' def', inum' <> srcnum -> inum' <> dstnum ->
+       In inum' (tree_inodes tree') ->
+       selN ilist inum' def' = selN ilist' inum' def' ]])%pred.
+
+  Definition rename_rep ds mscs' sm Fm fsxp Ftop tree tree_elem ilist frees cwd dnum srcpath srcname dstpath dstname hm :=
+    (exists d tree' srcnum srcents dstnum dstents subtree pruned renamed ilist' frees',
+    LOG.rep (FSXPLog fsxp) (SB.rep fsxp) (LOG.NoTxn (pushd d ds)) (MSLL mscs') sm hm *
+    rename_rep_inner d frees' ilist' tree' srcnum srcents subtree pruned dstnum dstents renamed mscs' sm Fm fsxp Ftop tree tree_elem ilist frees cwd dnum srcpath srcname dstpath dstname
+    )%pred.
+
+  
