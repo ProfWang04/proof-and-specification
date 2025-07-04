@@ -82,3 +82,22 @@ Fixpoint hashmap_get hm h : option {sz : nat & word sz} :=
                                   
 Definition hash_safe hm h sz (k : word sz) :=
   hashmap_get hm h = None \/ hashmap_get hm h = Some (existT _ _ k).
+
+Definition hash_to_valu (h: word hashlen) : valu.
+  set (zext h (valulen-hashlen)) as r.
+  rewrite hashlen_valulen in r.
+  apply r.
+Defined.
+                                  
+Definition sync_mem AT AEQ (m : @mem AT AEQ valuset) : @mem AT AEQ valuset :=
+  fun a => match m a with
+    | None => None
+    | Some (v, _) => Some (v, nil)
+    end.
+
+Definition sync_addr AT AEQ (m : @mem AT AEQ valuset) a : @mem AT AEQ valuset :=
+  fun a' => if AEQ a a' then
+    match m a with
+    | None => None
+    | Some (v, _) => Some (v, nil)
+    end else m a'.
